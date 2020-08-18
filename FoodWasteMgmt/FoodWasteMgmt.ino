@@ -39,7 +39,7 @@
 #define  MOTOR_EM_LED       2
 #define  MOTOR_STIR_LED     3
 #define  WORKING_LED        4
-#define  SERVO_EM           7
+#define  SERVO_EM           5
 
 // Knob control constant
 #define  START_ANGLE    0.0
@@ -48,13 +48,18 @@
 #define  KNOB_BACKWARD  -1
 #define  KNOB_CLICK  2
 #define  KNOB_NOACTION  0
+#define  CLICK_AMOUNT 60
+#define  FORWARD_AMOUNT 20
+#define  BACKWARD_AMOUNT -20
+
 
 // Servo Control for MG996
-#define min_angle 0  // Minimum Servo angle
-#define max_angle 180  // Maximum servo angle
-#define min_pulse_width 500   // 540 uS : PulseWidth for on-pulse to write 0 degree angle on servo
-#define max_pulse_width 2000    //20000 uS : PulseWidth for on-pulse to write 180 degree angle on servo
-
+#define MIN_ANGLE 0  // Minimum Servo angle
+#define MAX_ANGLE 180  // Maximum servo angle
+#define MIN_PULSE_WIDTH 540   // 540 uS : PulseWidth for on-pulse to write 0 degree angle on servo
+#define MAX_PULSE_WIDTH 2000    //20000 uS : PulseWidth for on-pulse to write 180 degree angle on servo
+#define MIN_DUTY_CYCLE 10
+#define MAX_DUTY_CYCLE 255
 
 
 // Tlv493d Opject
@@ -82,10 +87,8 @@ void setup() {
 void loop() {
   delay(300);
   int direction =  chkMovement();
-  Serial.print("  Direction = ");
-  Serial.println(direction);
-  showLED(direction);
-  
+   showLED(direction);
+
 }
 
 /* Check movement of Knob by checking magnetic 3D sensor 
@@ -105,32 +108,36 @@ float         current_amount = 0.0;
 float         diff_amount = 0.0;
 int           direction = NO_CHANGE;
   Tlv493dMagnetic3DSensor.updateData();
-  Serial.print("Amount = ");
   current_amount = Tlv493dMagnetic3DSensor.getAmount();
-  Serial.print(current_amount);
   diff_amount = current_amount - prev_amount;
   prev_amount = current_amount;
-  
   current_angle = (Tlv493dMagnetic3DSensor.getAzimuth())* 100.0; // Azumuth angle is very small need to scale up
-  Serial.print(" mT; Azimuth angle (rad) = ");
-  Serial.print(current_angle);
   diff_angle =  current_angle - prev_angle;
   prev_angle = current_angle;
-  Serial.print(" mT; Different angle (rad) = ");
-  Serial.print(diff_angle); 
-  if (diff_angle > 20) 
+  if (diff_angle > FORWARD_AMOUNT) 
       direction =  KNOB_FORWARD;
-  else if (diff_angle < -20)
+  else if (diff_angle < BACKWARD_AMOUNT)
           direction = KNOB_BACKWARD;
       else 
           direction = KNOB_NOACTION;
 // if amount more than  20 then ignore any rotate movement sensor just report it's click
-   if (diff_amount > 20)
+   if (diff_amount > CLICK_AMOUNT)
    {
         direction  = KNOB_CLICK ;  // Click      
    } 
 //  Serial.print(" ; Polar angle (rad) = ");
 //  Serial.println(Tlv493dMagnetic3DSensor.getPolar());
+
+ /* 
+  Serial.print("Amount = ");
+  Serial.print(current_amount);
+  Serial.print(" mT; Azimuth angle (rad) = ");
+  Serial.print(current_angle);
+  Serial.print(" mT; Different angle (rad) = ");
+  Serial.print(diff_angle); 
+  Serial.print("  Direction = ");
+  Serial.println(direction);
+*/  
   return direction;
 }
 
@@ -164,35 +171,49 @@ void  showLED(int direction)
     if(toggle)
     {
         digitalWrite (WORKING_LED,TURNON_LED);
-        servoWrite (0);
+        servoWrite (90);
     }
     else
     {
         digitalWrite(WORKING_LED, TURNOFF_LED);
-        servoWrite(90);
+        servoWrite(0);
     }
     toggle = ~toggle;
   }
-  Serial.print ("Current LED =  ");
-  Serial.println ( currentled);
+//  Serial.print ("Current LED =  ");
+//  Serial.println ( currentled);
 
 }
 
 
-void servoWrite(int angle)
+void servoWrite (int angle)
+{
+    float duty, pulsewidth;
+    angle=constrain(angle,MIN_ANGLE,MAX_ANGLE);  // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
+    pulsewidth =map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);
+    duty=map(pulsewidth,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH,MIN_DUTY_CYCLE,MAX_DUTY_CYCLE);  // Boundaries to be calibrated by trial and error
+    analogWrite(SERVO_EM,duty);
+    Serial.print ("PulseWidth =  ");
+    Serial.print (pulsewidth);
+    Serial.print ("  Duty =  ");
+    Serial.println (duty);
+}
+
+
+void servWrite(int angle)
 {
     float delay_time;
     int i;
-    for ( i = 0 ; i < 30 ; i++)
+    for ( i = 0 ; i < 20 ; i++)
     {
-      angle=constrain(angle,min_angle,max_angle);  // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
-      delay_time=map(angle,min_angle,max_angle,min_pulse_width,max_pulse_width);  // Boundaries to be calibrated by trial and error
+      angle=constrain(angle,MIN_ANGLE,MAX_ANGLE);  // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
+      delay_time=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);  // Boundaries to be calibrated by trial and error
       digitalWrite(SERVO_EM,HIGH);
       delayUs(delay_time);
       digitalWrite(SERVO_EM,LOW);
       Serial.println (angle);
       Serial.println (delay_time);
-      delayUs((20000-delay_time));  // Because servo sg90 requires a total pulse of 20mS with proper duty cycle
+      delayUs((20000-delay_time));  // Because servo MG996 requires a total pulse of 20mS with proper duty cycle
     }
 }
 
