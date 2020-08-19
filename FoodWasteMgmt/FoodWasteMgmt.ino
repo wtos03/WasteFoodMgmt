@@ -56,8 +56,8 @@
 // Servo Control for MG996
 #define MIN_ANGLE 0  // Minimum Servo angle
 #define MAX_ANGLE 180  // Maximum servo angle
-#define MIN_PULSE_WIDTH 540   // 540 uS : PulseWidth for on-pulse to write 0 degree angle on servo
-#define MAX_PULSE_WIDTH 2000    //20000 uS : PulseWidth for on-pulse to write 180 degree angle on servo
+#define MIN_PULSE_WIDTH 540     // PulseWidth for on-pulse to write 0 degree angle on servo
+#define MAX_PULSE_WIDTH 2000    // PulseWidth for on-pulse to write 180 degree angle on servo
 #define MIN_DUTY_CYCLE 10
 #define MAX_DUTY_CYCLE 255
 
@@ -81,15 +81,16 @@ void setup() {
   Serial.begin(115200);
   while(!Serial);
   Tlv493dMagnetic3DSensor.begin();
-  servoWrite(0);    // Reset servo Position
+  servoWrite(10);    // Reset servo Position
 }
 
 void loop() {
-  delay(300);
-  int direction =  chkMovement();
+  int direction; 
+   delay(300);
+   direction =  chkMovement();
    showLED(direction);
-
-}
+   
+}   
 
 /* Check movement of Knob by checking magnetic 3D sensor 
  *  If different angle  >  20 mean move forward
@@ -111,7 +112,7 @@ int           direction = NO_CHANGE;
   current_amount = Tlv493dMagnetic3DSensor.getAmount();
   diff_amount = current_amount - prev_amount;
   prev_amount = current_amount;
-  current_angle = (Tlv493dMagnetic3DSensor.getAzimuth())* 100.0; // Azumuth angle is very small need to scale up
+  current_angle = (Tlv493dMagnetic3DSensor.getAzimuth())* 100.0; // Azimuth angle is very small need to scale up
   diff_angle =  current_angle - prev_angle;
   prev_angle = current_angle;
   if (diff_angle > FORWARD_AMOUNT) 
@@ -125,8 +126,6 @@ int           direction = NO_CHANGE;
    {
         direction  = KNOB_CLICK ;  // Click      
    } 
-//  Serial.print(" ; Polar angle (rad) = ");
-//  Serial.println(Tlv493dMagnetic3DSensor.getPolar());
 
  /* 
   Serial.print("Amount = ");
@@ -180,41 +179,27 @@ void  showLED(int direction)
     }
     toggle = ~toggle;
   }
-//  Serial.print ("Current LED =  ");
-//  Serial.println ( currentled);
 
 }
 
 
-void servoWrite (int angle)
-{
-    float duty, pulsewidth;
-    angle=constrain(angle,MIN_ANGLE,MAX_ANGLE);  // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
-    pulsewidth =map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);
-    duty=map(pulsewidth,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH,MIN_DUTY_CYCLE,MAX_DUTY_CYCLE);  // Boundaries to be calibrated by trial and error
-    analogWrite(SERVO_EM,duty);
-    Serial.print ("PulseWidth =  ");
-    Serial.print (pulsewidth);
-    Serial.print ("  Duty =  ");
-    Serial.println (duty);
-}
 
-
-void servWrite(int angle)
+void servoWrite(int angle)
 {
     float delay_time;
     int i;
-    for ( i = 0 ; i < 20 ; i++)
+    for ( i = 0 ; i < 20 ; i++)  // Loop send PWM until Servo move in position
     {
       angle=constrain(angle,MIN_ANGLE,MAX_ANGLE);  // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
       delay_time=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);  // Boundaries to be calibrated by trial and error
       digitalWrite(SERVO_EM,HIGH);
       delayUs(delay_time);
       digitalWrite(SERVO_EM,LOW);
-      Serial.println (angle);
-      Serial.println (delay_time);
       delayUs((20000-delay_time));  // Because servo MG996 requires a total pulse of 20mS with proper duty cycle
     }
+    Serial.println (angle);
+    Serial.println (delay_time);
+
 }
 
 void delayUs(unsigned long uS)
