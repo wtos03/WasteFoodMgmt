@@ -28,7 +28,7 @@
 
 // Define constant use in program
 
-
+#define  DEBUG
 #define  MAX_LED  3     // Knob control LED  4 because start from 0,1,2,3
 #define  TURNON_LED     LOW   // Depend on how you connect LED in this case LED's Negative pin connect to IO port
 #define  TURNOFF_LED    HIGH
@@ -56,10 +56,11 @@
 // Servo Control for MG996
 #define MIN_ANGLE 0  // Minimum Servo angle
 #define MAX_ANGLE 180  // Maximum servo angle
-#define MIN_PULSE_WIDTH 540     // PulseWidth for on-pulse to write 0 degree angle on servo
-#define MAX_PULSE_WIDTH 2000    // PulseWidth for on-pulse to write 180 degree angle on servo
-#define MIN_DUTY_CYCLE 10
-#define MAX_DUTY_CYCLE 255
+#define MIN_SERVO_ANGLE 0
+//#define MIN_PULSE_WIDTH 540     // PulseWidth for on-pulse to write 0 degree angle on servo
+//#define MAX_PULSE_WIDTH 2000    // PulseWidth for on-pulse to write 180 degree angle on servo
+#define MIN_DUTY_CYCLE 2         
+#define MAX_DUTY_CYCLE 25        
 
 
 // Tlv493d Opject
@@ -77,11 +78,12 @@ void setup() {
   digitalWrite(MOTOR_STIR_LED, TURNOFF_LED);   
   digitalWrite(AUTO_LED, TURNON_LED);   
   digitalWrite(WORKING_LED, TURNOFF_LED);
- 
+  
   Serial.begin(115200);
   while(!Serial);
   Tlv493dMagnetic3DSensor.begin();
-  servoWrite(10);    // Reset servo Position
+  setAnalogWriteFrequency (SERVO_EM,22);  //Test these number get around 50 Hz 20 ms
+  servoWrite(MIN_SERVO_ANGLE);    // Reset servo Position
 }
 
 void loop() {
@@ -127,7 +129,7 @@ int           direction = NO_CHANGE;
         direction  = KNOB_CLICK ;  // Click      
    } 
 
- /* 
+#ifdef DEBUG 
   Serial.print("Amount = ");
   Serial.print(current_amount);
   Serial.print(" mT; Azimuth angle (rad) = ");
@@ -136,7 +138,7 @@ int           direction = NO_CHANGE;
   Serial.print(diff_angle); 
   Serial.print("  Direction = ");
   Serial.println(direction);
-*/  
+#endif    
   return direction;
 }
 
@@ -175,16 +177,29 @@ void  showLED(int direction)
     else
     {
         digitalWrite(WORKING_LED, TURNOFF_LED);
-        servoWrite(0);
+        servoWrite(MIN_SERVO_ANGLE);
     }
     toggle = ~toggle;
   }
 
 }
 
-
-
-void servoWrite(int angle)
+void servoWrite (int angle)
+{     
+      int duty_cycle;
+      float pulse_width;
+      int result;
+      angle=constrain(angle,MIN_ANGLE,MAX_ANGLE);  // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
+   //   pulse_width=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);  // Boundaries to be calibrated by trial and error
+   //   duty_cycle=map(pulse_width,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH,MIN_DUTY_CYCLE,MAX_DUTY_CYCLE);  // Boundaries to be calibrated by trial and error
+        duty_cycle=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_DUTY_CYCLE,MAX_DUTY_CYCLE);  // Boundaries to be calibrated by trial and error
+        analogWrite(SERVO_EM,duty_cycle); 
+  //    delay (300);
+  //    analogWrite(SERVO_EM,0); 
+  
+}      
+/*
+void servWrite(int angle)
 {
     float delay_time;
     int i;
@@ -207,3 +222,4 @@ void delayUs(unsigned long uS)
   unsigned long time_now = micros();
       while(micros() < time_now + uS);
 }
+*/
