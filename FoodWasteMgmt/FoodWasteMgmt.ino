@@ -1,30 +1,33 @@
-/*This program control the Waste Food Managemet Machine. 
- * It will control 2 DC Motors  and 1 Servo 
- *    o  Motor1  control Food Crusher
- *    o  Motor2  control Stirring Rod
- *    o  Servo   control EM (Effective microorganisms)compost valve
- *   
- * Process start from   
- *    o Food crusher into small pieces
- *    o Add EM
- *    o Stir to mix EM with Waste Food.
- *    
- *  The Panel control  have 4 control Modes
- *    1.  Auto Mode mean start from Food crusher until Stir ingredient together.
- *    2.  Food crusher turn on/off  Food cruhser's motor only.
- *    3.  EM valve control to fill extra EM.
- *    4.  Stir mode turn on/off  Stir's motor only.
- *    
- * 
- * 
- * Created by: Wichai Tossamartvorakul wichai.tos@gmail.com
- * Date  16/8/20
- * 
- * 
- */
+/*This program control the Waste Food Managemet Machine.
+   It will control 2 DC Motors  and 1 Servo
+      o  Motor1  control Food Crusher
+      o  Motor2  control Stirring Rod
+      o  Servo   control EM (Effective microorganisms)compost valve
+
+   Process start from
+      o Food crusher into small pieces
+      o Add EM
+      o Stir to mix EM with Waste Food.
+
+    The Panel control  have 4 control Modes
+      1.  Auto Mode mean start from Food crusher until Stir ingredient together.
+      2.  Food crusher turn on/off  Food cruhser's motor only.
+      3.  EM valve control to fill extra EM.
+      4.  Stir mode turn on/off  Stir's motor only.
+
+
+
+   Created by: Wichai Tossamartvorakul wichai.tos@gmail.com
+   Date  16/8/20
+
+
+*/
 
 
 #include <Tlv493d.h>
+#include <TLE94112-ino.hpp>
+#include <TLE94112Motor-ino.hpp>
+#include "SPI.h"
 
 // Define constant use in program
 
@@ -49,8 +52,8 @@
 #define  KNOB_CLICK  2
 #define  KNOB_NOACTION  0
 #define  CLICK_AMOUNT 60
-#define  FORWARD_AMOUNT 20
-#define  BACKWARD_AMOUNT -20
+#define  FORWARD_AMOUNT 50
+#define  BACKWARD_AMOUNT -50
 
 
 // Servo Control for MG996
@@ -59,12 +62,21 @@
 #define MIN_SERVO_ANGLE 0
 //#define MIN_PULSE_WIDTH 540     // PulseWidth for on-pulse to write 0 degree angle on servo
 //#define MAX_PULSE_WIDTH 2000    // PulseWidth for on-pulse to write 180 degree angle on servo
-#define MIN_DUTY_CYCLE 2         
-#define MAX_DUTY_CYCLE 25        
+#define MIN_DUTY_CYCLE 2
+#define MAX_DUTY_CYCLE 25
 
 
 // Tlv493d Opject
 Tlv493d Tlv493dMagnetic3DSensor = Tlv493d();
+
+// Tle94112 Object
+Tle94112Ino controller = Tle94112Ino();
+
+// Tle94112Motor Objects
+Tle94112Motor crusher_motor(controller);
+Tle94112Motor stir_motor(controller);
+
+
 
 void setup() {
   pinMode(MOTOR_CRUNCH_LED, OUTPUT);
@@ -72,112 +84,134 @@ void setup() {
   pinMode(MOTOR_STIR_LED, OUTPUT);
   pinMode(AUTO_LED, OUTPUT);
   pinMode(WORKING_LED, OUTPUT);
-  pinMode(SERVO_EM,OUTPUT);
-  digitalWrite(MOTOR_CRUNCH_LED, TURNOFF_LED); 
-  digitalWrite(MOTOR_EM_LED, TURNOFF_LED);   
-  digitalWrite(MOTOR_STIR_LED, TURNOFF_LED);   
-  digitalWrite(AUTO_LED, TURNON_LED);   
+  pinMode(SERVO_EM, OUTPUT);
+  digitalWrite(MOTOR_CRUNCH_LED, TURNOFF_LED);
+  digitalWrite(MOTOR_EM_LED, TURNOFF_LED);
+  digitalWrite(MOTOR_STIR_LED, TURNOFF_LED);
+  digitalWrite(AUTO_LED, TURNON_LED);
   digitalWrite(WORKING_LED, TURNOFF_LED);
-  
+
   Serial.begin(115200);
-  while(!Serial);
+
+
+  while (!Serial);
   Tlv493dMagnetic3DSensor.begin();
-  setAnalogWriteFrequency (SERVO_EM,22);  //Test these number get around 50 Hz 20 ms
-  servoWrite(MIN_SERVO_ANGLE);    // Reset servo Position
+  setAnalogWriteFrequency (SERVO_EM, 22); //Test these number get around 50 Hz 20 ms
+  servoWrite(MIN_SERVO_ANGLE);            // Reset servo Position
+
+  // Enable MotorController on all Shields and Motors
+  // Note: Required to be done before starting to configure the motor
+  // controller is set to default CS1 pin
+  controller.begin();
+
+  // Connect a motor to HB1/HB2 highside and HB3/HB4 lowside
+  // With two combined halfbridges the motor can have up to 1.8 A
+  // IMPORTANT connect PWM to Lowside as higside is active Free wheeling
+  crusher_motor.initConnector(crusher_motor.HIGHSIDE, controller.TLE_NOPWM, controller.TLE_HB1, controller.TLE_HB2, controller.TLE_NOHB, controller.TLE_NOHB);
+  crusher_motor.initConnector(crusher_motor.LOWSIDE,  controller.TLE_PWM1,  controller.TLE_HB3, controller.TLE_HB4, controller.TLE_NOHB, controller.TLE_NOHB);
+  stir_motor.initConnector(crusher_motor.HIGHSIDE, controller.TLE_NOPWM, controller.TLE_HB9, controller.TLE_HB10, controller.TLE_NOHB, controller.TLE_NOHB);
+  stir_motor.initConnector(crusher_motor.LOWSIDE,  controller.TLE_PWM1,  controller.TLE_HB11, controller.TLE_HB12, controller.TLE_NOHB, controller.TLE_NOHB);
+
+  // start the motor controller
+  crusher_motor.begin();
+  stir_motor.begin();
+
+
 }
 
 void loop() {
-  int direction; 
-   delay(300);
-   direction =  chkMovement();
-   showLED(direction);
-   
-}   
+  int direction;
+  delay(300);
+  direction =  chkMovement();
+  knobPosition(direction);
 
-/* Check movement of Knob by checking magnetic 3D sensor 
- *  If different angle  >  20 mean move forward
- *  If different angle  < -20 mean move backward
- *  If magnetic field change > 20 mean knob had been click 
- * 
- */
+}
+
+/* Check movement of Knob by checking magnetic 3D sensor
+    If different angle  >  20 mean move forward
+    If different angle  < -20 mean move backward
+    If magnetic field change > 20 mean knob had been click
+
+*/
 
 int chkMovement ()
 {
-float static  prev_angle = START_ANGLE;
-float static  prev_amount = 0.0;
-float         current_angle = 0.0;
-float         diff_angle = 0.0;
-float         current_amount = 0.0;
-float         diff_amount = 0.0;
-int           direction = NO_CHANGE;
+  float static  prev_angle = START_ANGLE;
+  float static  prev_amount = 0.0;
+  float         current_angle = 0.0;
+  float         diff_angle = 0.0;
+  float         current_amount = 0.0;
+  float         diff_amount = 0.0;
+  int           direction = NO_CHANGE;
   Tlv493dMagnetic3DSensor.updateData();
   current_amount = Tlv493dMagnetic3DSensor.getAmount();
   diff_amount = current_amount - prev_amount;
   prev_amount = current_amount;
-  current_angle = (Tlv493dMagnetic3DSensor.getAzimuth())* 100.0; // Azimuth angle is very small need to scale up
+  current_angle = (Tlv493dMagnetic3DSensor.getAzimuth()) * 100.0; // Azimuth angle is very small need to scale up
   diff_angle =  current_angle - prev_angle;
   prev_angle = current_angle;
-  if (diff_angle > FORWARD_AMOUNT) 
-      direction =  KNOB_FORWARD;
+  if (diff_angle > FORWARD_AMOUNT)
+    direction =  KNOB_FORWARD;
   else if (diff_angle < BACKWARD_AMOUNT)
-          direction = KNOB_BACKWARD;
-      else 
-          direction = KNOB_NOACTION;
-// if amount more than  20 then ignore any rotate movement sensor just report it's click
-   if (diff_amount > CLICK_AMOUNT)
-   {
-        direction  = KNOB_CLICK ;  // Click      
-   } 
+    direction = KNOB_BACKWARD;
+  else
+    direction = KNOB_NOACTION;
+  // if amount more than  20 then ignore any rotate movement sensor just report it's click
+  if (diff_amount > CLICK_AMOUNT)
+  {
+    direction  = KNOB_CLICK ;  // Click
+  }
 
-#ifdef DEBUG 
+#ifdef DEBUG
   Serial.print("Amount = ");
   Serial.print(current_amount);
   Serial.print(" mT; Azimuth angle (rad) = ");
   Serial.print(current_angle);
   Serial.print(" mT; Different angle (rad) = ");
-  Serial.print(diff_angle); 
+  Serial.print(diff_angle);
   Serial.print("  Direction = ");
   Serial.println(direction);
-#endif    
+#endif
   return direction;
 }
 
 
-void  showLED(int direction)
+void  knobPosition(int direction)
 {
   int static  currentled = 0;
   int static  toggle = 0;
-  if (direction == KNOB_FORWARD )  
+  if (direction == KNOB_FORWARD )
   {
-   digitalWrite(currentled, TURNOFF_LED );    
-   currentled++;
-   if (currentled > MAX_LED)
-        currentled = 0;
-   digitalWrite(currentled, TURNON_LED );   
+    digitalWrite(currentled, TURNOFF_LED );
+    currentled++;
+    if (currentled > MAX_LED)
+      currentled = 0;
+    digitalWrite(currentled, TURNON_LED );
   }
 
-  if (direction == KNOB_BACKWARD )  
+  if (direction == KNOB_BACKWARD )
   {
-   digitalWrite(currentled, TURNOFF_LED );    
-   currentled--;
-   if (currentled < 0)
-   {
-        currentled = 0;
-   }     
-   digitalWrite(currentled, TURNON_LED );    // turn the LED on
+    digitalWrite(currentled, TURNOFF_LED );
+    currentled--;
+    if (currentled < 0)
+    {
+      currentled = 0;
+    }
+    digitalWrite(currentled, TURNON_LED );    // turn the LED on
   }
+  // Check Kbob click
 
   if (direction == KNOB_CLICK)
   {
-    if(toggle)
+    if (toggle)
     {
-        digitalWrite (WORKING_LED,TURNON_LED);
-        servoWrite (90);
+      digitalWrite (WORKING_LED, TURNON_LED);
+      deviceStart(currentled);
     }
     else
     {
-        digitalWrite(WORKING_LED, TURNOFF_LED);
-        servoWrite(MIN_SERVO_ANGLE);
+      digitalWrite(WORKING_LED, TURNOFF_LED);
+      deviceStop(currentled);
     }
     toggle = ~toggle;
   }
@@ -185,22 +219,84 @@ void  showLED(int direction)
 }
 
 void servoWrite (int angle)
-{     
-      int duty_cycle;
-      float pulse_width;
-      int result;
-      angle=constrain(angle,MIN_ANGLE,MAX_ANGLE);  // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
-   //   pulse_width=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);  // Boundaries to be calibrated by trial and error
-   //   duty_cycle=map(pulse_width,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH,MIN_DUTY_CYCLE,MAX_DUTY_CYCLE);  // Boundaries to be calibrated by trial and error
-        duty_cycle=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_DUTY_CYCLE,MAX_DUTY_CYCLE);  // Boundaries to be calibrated by trial and error
-        analogWrite(SERVO_EM,duty_cycle); 
-  //    delay (300);
-  //    analogWrite(SERVO_EM,0); 
-  
-}      
-/*
-void servWrite(int angle)
 {
+  int duty_cycle;
+  float pulse_width;
+  int result;
+  angle = constrain(angle, MIN_ANGLE, MAX_ANGLE); // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
+  //   pulse_width=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);  // Boundaries to be calibrated by trial and error
+  //   duty_cycle=map(pulse_width,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH,MIN_DUTY_CYCLE,MAX_DUTY_CYCLE);  // Boundaries to be calibrated by trial and error
+  duty_cycle = map(angle, MIN_ANGLE, MAX_ANGLE, MIN_DUTY_CYCLE, MAX_DUTY_CYCLE); // Boundaries to be calibrated by trial and error
+  analogWrite(SERVO_EM, duty_cycle);
+  //    delay (300);
+  //    analogWrite(SERVO_EM,0);
+
+}
+
+/*
+   To start device  Crusher Motor, Stir Motor or Servo
+   Can start one device at a time ????
+*/
+void deviceStart (int device_no)
+{
+  switch (device_no)
+  {
+    case MOTOR_CRUNCH_LED:
+      delay (1000); // Prevent Motor to stop suddenly after start
+      stir_motor.coast();
+      crusher_motor.start(255);
+      break;
+    case MOTOR_EM_LED:
+      emValue();  // No need delay because had been delay in emValue
+      stir_motor.coast();
+      crusher_motor.coast();
+      break;
+    case  MOTOR_STIR_LED:
+      delay (1000); // Prevent Motor to stop suddenly after start
+      crusher_motor.coast();
+      stir_motor.start(255);
+      break;
+
+  }
+
+}
+
+
+/*
+   To stop device  Crusher Motor, Stir Motor or Servo
+*/
+void deviceStop (int device_no)
+{
+  switch (device_no)
+  {
+    case MOTOR_CRUNCH_LED:
+      delay (1000); // Prevent Motor to stop suddenly after start
+      crusher_motor.coast();
+      break;
+    case  MOTOR_STIR_LED:
+      delay (1000); // Prevent Motor to stop suddenly after start
+      stir_motor.coast();
+      break;
+
+  }
+
+}
+
+/*
+ * For EM Value just open and close
+ */
+void emValue()
+{
+    servoWrite (90);
+    delay(1000);
+    servoWrite (0);
+ 
+}
+
+
+/*
+  void servWrite(int angle)
+  {
     float delay_time;
     int i;
     for ( i = 0 ; i < 20 ; i++)  // Loop send PWM until Servo move in position
@@ -215,11 +311,11 @@ void servWrite(int angle)
     Serial.println (angle);
     Serial.println (delay_time);
 
-}
+  }
 
-void delayUs(unsigned long uS)
-{
+  void delayUs(unsigned long uS)
+  {
   unsigned long time_now = micros();
       while(micros() < time_now + uS);
-}
+  }
 */
