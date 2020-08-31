@@ -239,7 +239,10 @@ void  knobPosition(int direction)
     {
           deviceStop(currentled);
     }
-    toggle = ~toggle;
+    if (currentled != SERVO_EM_LED)  // SERVO_EM is Push ON/Off  Not toggle state like other  
+    {
+        toggle = ~toggle;
+    }
   }
 
 }
