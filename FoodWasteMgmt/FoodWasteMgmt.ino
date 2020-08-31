@@ -32,14 +32,15 @@
 // Define constant use in program
 
 #define  DEBUG
+
 #define  MAX_LED  3     // Knob control LED  4 because start from 0,1,2,3
 #define  TURNON_LED     LOW   // Depend on how you connect LED in this case LED's Negative pin connect to IO port
 #define  TURNOFF_LED    HIGH
 
 // Port use for Display LED and Control Motor
 #define  AUTO_LED           0
-#define  MOTOR_CRUNCH_LED   1
-#define  MOTOR_EM_LED       2
+#define  MOTOR_CRUSH_LED   1
+#define  SERVO_EM_LED       2
 #define  MOTOR_STIR_LED     3
 #define  WORKING_LED        4
 #define  SERVO_EM           5
@@ -51,15 +52,16 @@
 #define  KNOB_BACKWARD  -1
 #define  KNOB_CLICK  2
 #define  KNOB_NOACTION  0
-#define  CLICK_AMOUNT 60
-#define  FORWARD_AMOUNT 50
+#define  CLICK_AMOUNT 50
+#define  FORWARD_AMOUNT  50
 #define  BACKWARD_AMOUNT -50
 
 
 // Servo Control for MG996
 #define MIN_ANGLE 0  // Minimum Servo angle
 #define MAX_ANGLE 180  // Maximum servo angle
-#define MIN_SERVO_ANGLE 0
+#define MIN_VALVE   60  // Want to move backward
+#define MAX_VALVE   0
 //#define MIN_PULSE_WIDTH 540     // PulseWidth for on-pulse to write 0 degree angle on servo
 //#define MAX_PULSE_WIDTH 2000    // PulseWidth for on-pulse to write 180 degree angle on servo
 #define MIN_DUTY_CYCLE 2
@@ -77,19 +79,16 @@ Tle94112Motor crusher_motor(controller);
 Tle94112Motor stir_motor(controller);
 
 
-
 void setup() {
-  pinMode(MOTOR_CRUNCH_LED, OUTPUT);
-  pinMode(MOTOR_EM_LED, OUTPUT);
+  pinMode(MOTOR_CRUSH_LED, OUTPUT);
+  pinMode(SERVO_EM_LED, OUTPUT);
   pinMode(MOTOR_STIR_LED, OUTPUT);
   pinMode(AUTO_LED, OUTPUT);
   pinMode(WORKING_LED, OUTPUT);
   pinMode(SERVO_EM, OUTPUT);
-  digitalWrite(MOTOR_CRUNCH_LED, TURNOFF_LED);
-  digitalWrite(MOTOR_EM_LED, TURNOFF_LED);
-  digitalWrite(MOTOR_STIR_LED, TURNOFF_LED);
-  digitalWrite(AUTO_LED, TURNON_LED);
+  
   digitalWrite(WORKING_LED, TURNOFF_LED);
+  showLED(AUTO_LED);  // WORKING_LED  Separate from other LED
 
   Serial.begin(115200);
 
@@ -97,7 +96,7 @@ void setup() {
   while (!Serial);
   Tlv493dMagnetic3DSensor.begin();
   setAnalogWriteFrequency (SERVO_EM, 22); //Test these number get around 50 Hz 20 ms
-  servoWrite(MIN_SERVO_ANGLE);            // Reset servo Position
+  servoWrite(MIN_VALVE);            // Reset servo Position
 
   // Enable MotorController on all Shields and Motors
   // Note: Required to be done before starting to configure the motor
@@ -108,7 +107,7 @@ void setup() {
   // With two combined halfbridges the motor can have up to 1.8 A
   // IMPORTANT connect PWM to Lowside as higside is active Free wheeling
   crusher_motor.initConnector(crusher_motor.HIGHSIDE, controller.TLE_NOPWM, controller.TLE_HB1, controller.TLE_HB2, controller.TLE_NOHB, controller.TLE_NOHB);
-  crusher_motor.initConnector(crusher_motor.LOWSIDE,  controller.TLE_PWM1,  controller.TLE_HB3, controller.TLE_HB4, controller.TLE_NOHB, controller.TLE_NOHB);
+  crusher_motor.initConnector(crusher_motor.LOWSIDE,  controller.TLE_PWM1, controller.TLE_HB3, controller.TLE_HB4, controller.TLE_NOHB, controller.TLE_NOHB);
   stir_motor.initConnector(crusher_motor.HIGHSIDE, controller.TLE_NOPWM, controller.TLE_HB9, controller.TLE_HB10, controller.TLE_NOHB, controller.TLE_NOHB);
   stir_motor.initConnector(crusher_motor.LOWSIDE,  controller.TLE_PWM1,  controller.TLE_HB11, controller.TLE_HB12, controller.TLE_NOHB, controller.TLE_NOHB);
 
@@ -121,11 +120,28 @@ void setup() {
 
 void loop() {
   int direction;
-  delay(300);
+  delay(300);  // Control sentivity of the knob
   direction =  chkMovement();
   knobPosition(direction);
+ 
+}
+
+/*
+ * Show LED on the panel TURNON Selected LED and  TURNOFF all others LED
+ */
+void showLED( int led)
+{
+//TURN ALL OFF FIRST  FOR SIMPLE PROGRAMMING
+  digitalWrite(MOTOR_CRUSH_LED, TURNOFF_LED);
+  digitalWrite(SERVO_EM_LED, TURNOFF_LED);
+  digitalWrite(MOTOR_STIR_LED, TURNOFF_LED);
+  digitalWrite(AUTO_LED, TURNOFF_LED);
+// TURN ON WHAT YOU WANT
+  digitalWrite(led, TURNON_LED);
 
 }
+
+
 
 /* Check movement of Knob by checking magnetic 3D sensor
     If different angle  >  20 mean move forward
@@ -175,6 +191,11 @@ int chkMovement ()
   return direction;
 }
 
+/*
+ * Check KNOB postion on the panel
+ * INPUT  : Direction of movement ( FORWARD,BACKWARD, CLICK)
+ *  
+ */
 
 void  knobPosition(int direction)
 {
@@ -182,36 +203,41 @@ void  knobPosition(int direction)
   int static  toggle = 0;
   if (direction == KNOB_FORWARD )
   {
-    digitalWrite(currentled, TURNOFF_LED );
     currentled++;
     if (currentled > MAX_LED)
       currentled = 0;
-    digitalWrite(currentled, TURNON_LED );
+    showLED(currentled);
   }
 
   if (direction == KNOB_BACKWARD )
   {
-    digitalWrite(currentled, TURNOFF_LED );
     currentled--;
     if (currentled < 0)
     {
       currentled = 0;
     }
-    digitalWrite(currentled, TURNON_LED );    // turn the LED on
+    showLED(currentled);
   }
+  
   // Check Kbob click
 
   if (direction == KNOB_CLICK)
   {
     if (toggle)
     {
-      digitalWrite (WORKING_LED, TURNON_LED);
-      deviceStart(currentled);
+      if (currentled == AUTO_LED)  // AUTO PROGRAM Start
+      {
+          autoStartStop();
+          showLED(currentled);   
+      }
+      else
+      {
+          deviceStart(currentled);
+      }
     }
     else
     {
-      digitalWrite(WORKING_LED, TURNOFF_LED);
-      deviceStop(currentled);
+          deviceStop(currentled);
     }
     toggle = ~toggle;
   }
@@ -228,10 +254,39 @@ void servoWrite (int angle)
   //   duty_cycle=map(pulse_width,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH,MIN_DUTY_CYCLE,MAX_DUTY_CYCLE);  // Boundaries to be calibrated by trial and error
   duty_cycle = map(angle, MIN_ANGLE, MAX_ANGLE, MIN_DUTY_CYCLE, MAX_DUTY_CYCLE); // Boundaries to be calibrated by trial and error
   analogWrite(SERVO_EM, duty_cycle);
-  //    delay (300);
-  //    analogWrite(SERVO_EM,0);
+  delay(1000);
+  analogWrite(SERVO_EM,0); // Disable PWM Prevent servo hot
+ 
 
 }
+
+/*
+ * This procedure called when users click when knob show at Auto position. It will start from motor crusher until
+ * stop, open EM valve  and start stir motor.
+ */
+void autoStartStop (void)
+{
+  
+  // Start crusher motor for XXX time or until stop sensor trigger
+  int  trigger = 0;
+  
+  do
+  {
+    deviceStart(MOTOR_CRUSH_LED);
+    delay (10000);
+    
+  }while (trigger);
+
+  // Enable EM valve
+    deviceStart(SERVO_EM_LED);
+    delay(3000);
+  // Enable Motor Stir for XXX time
+    deviceStart(MOTOR_STIR_LED);
+    delay (10000);  
+    deviceStop(MOTOR_STIR_LED);
+
+}
+
 
 /*
    To start device  Crusher Motor, Stir Motor or Servo
@@ -239,24 +294,30 @@ void servoWrite (int angle)
 */
 void deviceStart (int device_no)
 {
+  showLED(device_no);     // TURN ON Devices' LED 
+  digitalWrite (WORKING_LED, TURNON_LED);  //TURN ON STATUS LED
+  
   switch (device_no)
   {
-    case MOTOR_CRUNCH_LED:
-      delay (1000); // Prevent Motor to stop suddenly after start
-      stir_motor.coast();
-      crusher_motor.start(255);
-      break;
-    case MOTOR_EM_LED:
+    case MOTOR_CRUSH_LED:
+       delay (1000); // Prevent Motor to stop suddenly after start
+       stir_motor.coast();
+       crusher_motor.setSpeed(0);
+       crusher_motor.rampSpeed(255,5000);   // Use start Big motor cannot start ???
+ //    crusher_motor.start(255);
+       break;
+    case SERVO_EM_LED:
       emValue();  // No need delay because had been delay in emValue
+      digitalWrite (WORKING_LED, TURNOFF_LED);  //TURN OFF WORKING LED
       stir_motor.coast();
       crusher_motor.coast();
       break;
     case  MOTOR_STIR_LED:
       delay (1000); // Prevent Motor to stop suddenly after start
       crusher_motor.coast();
-      stir_motor.start(255);
+      stir_motor.setSpeed(0);
+      stir_motor.rampSpeed(255,5000);   // Use start Big motor cannot start ???
       break;
-
   }
 
 }
@@ -267,9 +328,10 @@ void deviceStart (int device_no)
 */
 void deviceStop (int device_no)
 {
+  digitalWrite(WORKING_LED, TURNOFF_LED);
   switch (device_no)
   {
-    case MOTOR_CRUNCH_LED:
+    case MOTOR_CRUSH_LED:
       delay (1000); // Prevent Motor to stop suddenly after start
       crusher_motor.coast();
       break;
@@ -286,11 +348,12 @@ void deviceStop (int device_no)
  * For EM Value just open and close
  */
 void emValue()
-{
-    servoWrite (90);
+{   Serial.println("Servo Start");
+    servoWrite (MAX_VALVE);
     delay(1000);
-    servoWrite (0);
- 
+    servoWrite (MIN_VALVE);
+    delay(1000);  // Move Back 
+  
 }
 
 
