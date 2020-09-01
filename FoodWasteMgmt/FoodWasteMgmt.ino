@@ -33,15 +33,15 @@
 
 #define  DEBUG
 
-#define  MAX_LED  3     // Knob control LED  4 because start from 0,1,2,3
+#define  MAX_LED  4     // Knob control LED  4 
 #define  TURNON_LED     LOW   // Depend on how you connect LED in this case LED's Negative pin connect to IO port
 #define  TURNOFF_LED    HIGH
 
 // Port use for Display LED and Control Motor
 #define  AUTO_LED           0
-#define  MOTOR_CRUSH_LED   1
-#define  SERVO_EM_LED       2
-#define  MOTOR_STIR_LED     3
+#define  MOTOR_CRUSH_LED    1
+#define  SERVO_EM_LED       8
+#define  MOTOR_STIR_LED     9
 #define  WORKING_LED        4
 #define  SERVO_EM           5
 
@@ -67,6 +67,7 @@
 #define MIN_DUTY_CYCLE 2
 #define MAX_DUTY_CYCLE 25
 
+int ledPanel[MAX_LED] =  {AUTO_LED,MOTOR_CRUSH_LED,SERVO_EM_LED,MOTOR_STIR_LED};   // Actual Port use in IO
 
 // Tlv493d Opject
 Tlv493d Tlv493dMagnetic3DSensor = Tlv493d();
@@ -199,14 +200,14 @@ int chkMovement ()
 
 void  knobPosition(int direction)
 {
-  int static  currentled = 0;
+  int static  currentled = 0;  // Run from  0- 3
   int static  toggle = 0;
   if (direction == KNOB_FORWARD )
   {
     currentled++;
-    if (currentled > MAX_LED)
+    if (currentled >= MAX_LED)
       currentled = 0;
-    showLED(currentled);
+    showLED(ledPanel[currentled]);
   }
 
   if (direction == KNOB_BACKWARD )
@@ -216,7 +217,7 @@ void  knobPosition(int direction)
     {
       currentled = 0;
     }
-    showLED(currentled);
+    showLED(ledPanel[currentled]);
   }
   
   // Check Kbob click
@@ -225,21 +226,21 @@ void  knobPosition(int direction)
   {
     if (toggle)
     {
-      if (currentled == AUTO_LED)  // AUTO PROGRAM Start
+      if (ledPanel[currentled] == AUTO_LED)  // AUTO PROGRAM Start
       {
           autoStartStop();
-          showLED(currentled);   
+          showLED(ledPanel[currentled]);   
       }
       else
       {
-          deviceStart(currentled);
+          deviceStart(ledPanel[currentled]);
       }
     }
     else
     {
-          deviceStop(currentled);
+          deviceStop(ledPanel[currentled]);
     }
-    if (currentled != SERVO_EM_LED)  // SERVO_EM is Push ON/Off  Not toggle state like other  
+    if (ledPanel[currentled] != SERVO_EM_LED)  // SERVO_EM is Push ON/Off  Not toggle state like other  
     {
         toggle = ~toggle;
     }
