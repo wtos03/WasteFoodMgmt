@@ -42,7 +42,7 @@
 #define  MOTOR_CRUSH_LED    1
 #define  SERVO_EM_LED       8
 #define  MOTOR_STIR_LED     9
-#define  WORKING_LED        4
+#define  WORKING_LED        6
 #define  SERVO_EM           5
 
 // Knob control constant
