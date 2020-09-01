@@ -97,6 +97,8 @@ void setup() {
   while (!Serial);
   Tlv493dMagnetic3DSensor.begin();
   setAnalogWriteFrequency (SERVO_EM, 22); //Test these number get around 50 Hz 20 ms
+  setAnalogWriteFrequency (WORKING_LED, 2); //Test these number get around 50 Hz 20 ms
+  
   servoWrite(MIN_VALVE);            // Reset servo Position
 
   // Enable MotorController on all Shields and Motors
@@ -299,8 +301,9 @@ void autoStartStop (void)
 void deviceStart (int device_no)
 {
   showLED(device_no);     // TURN ON Devices' LED 
-  digitalWrite (WORKING_LED, TURNON_LED);  //TURN ON STATUS LED
-  
+//  digitalWrite (WORKING_LED, TURNON_LED);  //TURN ON STATUS LED
+   analogWrite(WORKING_LED, 100);
+ 
   switch (device_no)
   {
     case MOTOR_CRUSH_LED:
@@ -312,7 +315,8 @@ void deviceStart (int device_no)
        break;
     case SERVO_EM_LED:
       emValue();  // No need delay because had been delay in emValue
-      digitalWrite (WORKING_LED, TURNOFF_LED);  //TURN OFF WORKING LED
+ //     digitalWrite (WORKING_LED, TURNOFF_LED);  //TURN OFF WORKING LED
+      analogWrite(WORKING_LED, 255);
       stir_motor.coast();
       crusher_motor.coast();
       break;
@@ -332,7 +336,8 @@ void deviceStart (int device_no)
 */
 void deviceStop (int device_no)
 {
-  digitalWrite(WORKING_LED, TURNOFF_LED);
+//  digitalWrite(WORKING_LED, TURNOFF_LED);
+  analogWrite(WORKING_LED, 255);
   switch (device_no)
   {
     case MOTOR_CRUSH_LED:
