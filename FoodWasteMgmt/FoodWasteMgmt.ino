@@ -40,11 +40,14 @@
 // Port use for Display LED and Control Motor
 #define  AUTO_LED           0
 #define  MOTOR_CRUSH_LED    1
+#define  START_STOP_SW      2
 #define  SERVO_EM_LED       8
 #define  MOTOR_STIR_LED     9
 #define  WORKING_LED        6
 #define  SERVO_EM           5
 
+
+ 
 // Knob control constant
 #define  START_ANGLE    0.0
 #define  NO_CHANGE  0
@@ -55,7 +58,7 @@
 #define  CLICK_AMOUNT 50
 #define  FORWARD_AMOUNT  50
 #define  BACKWARD_AMOUNT -50
-
+#define  SWITCH_PRESS 1
 
 // Servo Control for MG996
 #define MIN_ANGLE 0  // Minimum Servo angle
@@ -67,7 +70,11 @@
 #define MIN_DUTY_CYCLE 2
 #define MAX_DUTY_CYCLE 25
 
-int ledPanel[MAX_LED] =  {AUTO_LED,MOTOR_CRUSH_LED,SERVO_EM_LED,MOTOR_STIR_LED};   // Actual Port use in IO
+//Global Variable
+// MAP Table between LED Panel to Actual Port usage 
+int ledPanel[MAX_LED] =  {AUTO_LED,MOTOR_CRUSH_LED,SERVO_EM_LED,MOTOR_STIR_LED};   
+volatile int status = 0;
+
 
 // Tlv493d Opject
 Tlv493d Tlv493dMagnetic3DSensor = Tlv493d();
@@ -87,6 +94,8 @@ void setup() {
   pinMode(AUTO_LED, OUTPUT);
   pinMode(WORKING_LED, OUTPUT);
   pinMode(SERVO_EM, OUTPUT);
+  pinMode(START_STOP_SW,INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(START_STOP_SW), startStopSW, LOW);
   
   digitalWrite(WORKING_LED, TURNOFF_LED);
   showLED(AUTO_LED);  // WORKING_LED  Separate from other LED
@@ -130,6 +139,15 @@ void loop() {
 }
 
 /*
+ * Start Stop SW  ISR
+ * Global  variable
+ */
+void startStopSW(void)
+{
+    for (int i = 0 ; i <10000; i++);   // SW Debounce 
+    status = SWITCH_PRESS;
+}
+/*
  * Show LED on the panel TURNON Selected LED and  TURNOFF all others LED
  */
 void showLED( int led)
@@ -140,7 +158,7 @@ void showLED( int led)
   digitalWrite(MOTOR_STIR_LED, TURNOFF_LED);
   digitalWrite(AUTO_LED, TURNOFF_LED);
 // TURN ON WHAT YOU WANT
-  digitalWrite(led, TURNON_LED);
+  digitalWrite(ledPanel[led], TURNON_LED);   // MAP LED Panel to Acutal Port
 
 }
 
@@ -197,41 +215,38 @@ int chkMovement ()
 /*
  * Check KNOB postion on the panel
  * INPUT  : Direction of movement ( FORWARD,BACKWARD, CLICK)
- *  
+ * OUTPUT : Position of LED on Panel 0 -3
  */
 
-void  knobPosition(int direction)
+int  knobPosition(int direction)
 {
-  int static  currentled = 0;  // Run from  0- 3
+  int static  currentled = 0; 
   int static  toggle = 0;
   if (direction == KNOB_FORWARD )
   {
     currentled++;
     if (currentled >= MAX_LED)
       currentled = 0;
-    showLED(ledPanel[currentled]);
   }
 
   if (direction == KNOB_BACKWARD )
   {
     currentled--;
     if (currentled < 0)
-    {
       currentled = 0;
-    }
-    showLED(ledPanel[currentled]);
+  //  showLED(currentled);
   }
   
-  // Check Kbob click
+  // Check Switch Press
 
-  if (direction == KNOB_CLICK)
+  if (status == SWITCH_PRESS)
   {
     if (toggle)
     {
       if (ledPanel[currentled] == AUTO_LED)  // AUTO PROGRAM Start
       {
-          autoStartStop();
-          showLED(ledPanel[currentled]);   
+            autoStartStop();
+ //           showLED(currentled);   
       }
       else
       {
@@ -240,13 +255,17 @@ void  knobPosition(int direction)
     }
     else
     {
-          deviceStop(ledPanel[currentled]);
+        deviceStop(ledPanel[currentled]);
     }
     if (ledPanel[currentled] != SERVO_EM_LED)  // SERVO_EM is Push ON/Off  Not toggle state like other  
     {
         toggle = ~toggle;
     }
+    status = 0;   // Clear Switch Press
+    
   }
+  showLED(currentled);
+  return currentled;
 
 }
 
@@ -300,7 +319,7 @@ void autoStartStop (void)
 */
 void deviceStart (int device_no)
 {
-  showLED(device_no);     // TURN ON Devices' LED 
+//  showLED(device_no);     // TURN ON Devices' LED 
 //  digitalWrite (WORKING_LED, TURNON_LED);  //TURN ON STATUS LED
    analogWrite(WORKING_LED, 100);
  
