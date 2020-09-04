@@ -46,7 +46,13 @@
 #define  SERVO_EM_LED       8
 #define  MOTOR_STIR_LED     9
 #define  WORKING_LED        6
-#define  SERVO_EM           5
+#define  SERVO_PORT         5
+
+//  For Motor Start/Stop (order in switch case
+#define  MOTOR_CRUSH    1
+#define  SERVO_EM       2
+#define  MOTOR_STIR     3     
+
 
 #define CRUSH_TIME        5000
 #define STIR_TIME         5000
@@ -99,7 +105,7 @@ void setup() {
   pinMode(MOTOR_STIR_LED, OUTPUT);
   pinMode(AUTO_LED, OUTPUT);
   pinMode(WORKING_LED, OUTPUT);
-  pinMode(SERVO_EM, OUTPUT);
+  pinMode(SERVO_PORT, OUTPUT);
   pinMode(START_STOP_SW,INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(START_STOP_SW), startStopSW, LOW);
   
@@ -111,7 +117,7 @@ void setup() {
 
   while (!Serial);
   Tlv493dMagnetic3DSensor.begin();
-  setAnalogWriteFrequency (SERVO_EM, 22); //Test these number get around 50 Hz 20 ms
+  setAnalogWriteFrequency (SERVO_PORT, 22); //Test these number get around 50 Hz 20 ms
   setAnalogWriteFrequency (WORKING_LED, 2); //Test these number get around 50 Hz 20 ms
   
   servoWrite(MIN_VALVE);            // Reset servo Position
@@ -151,8 +157,7 @@ void loop() {
 void startStopSW(void)
 {
     for (int i= 0; i < 10000;i++);
-    switchStatus = SWITCH_PRESS;
-   
+    switchStatus = SWITCH_PRESS; 
 }
 /*
  * Show LED on the panel TURNON Selected LED and  TURNOFF all others LED.
@@ -251,20 +256,20 @@ int  knobPosition(int direction)
   {
     if (toggle) // ON
     {
-      if (ledPanel[currentled] == AUTO_LED)  // AUTO PROGRAM Start
+      if (currentled == AUTO_LED)  // AUTO PROGRAM Start
       {
             autoStartStop();
       }
       else
       {
-          deviceStart(ledPanel[currentled]); // MAP Position of LED to Port
+          deviceStart(currentled); 
       }
     }
     else // OFF
     {
-          deviceStop(ledPanel[currentled]); // MAP Position of LED to Port
+          deviceStop(currentled); // MAP Position of LED to Port
     }
-    if (ledPanel[currentled] != SERVO_EM_LED)  // SERVO_EM is Push ON/Off  Not toggle state like other  
+    if (currentled != SERVO_EM)  // SERVO_EM is Push ON/Off  Not toggle state like other  
     {
         toggle = ~toggle;
     }
@@ -285,9 +290,9 @@ void servoWrite (int angle)
   //   pulse_width=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);  // Boundaries to be calibrated by trial and error
   //   duty_cycle=map(pulse_width,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH,MIN_DUTY_CYCLE,MAX_DUTY_CYCLE);  // Boundaries to be calibrated by trial and error
   duty_cycle = map(angle, MIN_ANGLE, MAX_ANGLE, MIN_DUTY_CYCLE, MAX_DUTY_CYCLE); // Boundaries to be calibrated by trial and error
-  analogWrite(SERVO_EM, duty_cycle);
+  analogWrite(SERVO_PORT, duty_cycle);
   delay(1000);
-  analogWrite(SERVO_EM,0); // Disable PWM Prevent servo hot
+  analogWrite(SERVO_PORT,0); // Disable PWM Prevent servo hot
  
 
 }
@@ -318,7 +323,7 @@ void autoStartStop (void)
       case 1:  // TURN ON MOTOR CRUSH
           if (crushTime == 0)
           {
-              deviceStart(MOTOR_CRUSH_LED);
+              deviceStart(MOTOR_CRUSH);
           }
           if (crushTime < CRUSH_TIME)
           {
@@ -333,8 +338,8 @@ void autoStartStop (void)
       case 2:  
           if (stirTime == 0)
           {
-              deviceStart(SERVO_EM_LED);
-              deviceStart(MOTOR_STIR_LED);
+              deviceStart(SERVO_EM);
+              deviceStart(MOTOR_STIR);
           }
           if (stirTime < STIR_TIME)
           {
@@ -342,7 +347,7 @@ void autoStartStop (void)
           }
           else
           { 
-            deviceStop (MOTOR_STIR_LED);
+            deviceStop (MOTOR_STIR);
             endProgram = 1;
             stirTime = 0;
           }
@@ -357,10 +362,10 @@ void autoStartStop (void)
           switch (state)
           {
             case 1:
-              deviceStop (MOTOR_CRUSH_LED);
+              deviceStop (MOTOR_CRUSH);
               break;
             case 2:
-              deviceStop (MOTOR_STIR_LED);
+              deviceStop (MOTOR_STIR);
               break;
           }
        }
@@ -378,25 +383,26 @@ void autoStartStop (void)
 */
 void deviceStart (int device_no)
 {
-   digitalWrite (device_no,TURNON_LED);     // TURN ON Devices' LED Make Stir motor not start ??
+//   digitalWrite (device_no,TURNON_LED);     // TURN ON Devices' LED Make Stir motor not start ??
+   showLED (device_no);
    analogWrite(WORKING_LED, 100);
    
   switch (device_no)
   {
-    case MOTOR_CRUSH_LED:
+    case MOTOR_CRUSH:
        delay (1000); // Prevent Motor to stop suddenly after start
        stir_motor.coast();
        crusher_motor.setSpeed(0);
        crusher_motor.rampSpeed(255,5000);   // Use start Big motor cannot start ???
 //    crusher_motor.start(255);
        break;
-    case SERVO_EM_LED:
+    case SERVO_EM:
       stir_motor.coast();
       crusher_motor.coast();
       emValve();  // No need delay because had been delay in emValve
       analogWrite(WORKING_LED, 255);
       break;
-    case  MOTOR_STIR_LED:
+    case  MOTOR_STIR:
       delay (1000); // Prevent Motor to stop suddenly after start
       crusher_motor.coast();
  //     stir_motor.setSpeed(0);
@@ -413,15 +419,14 @@ void deviceStart (int device_no)
 */
 void deviceStop (int device_no)
 {
-//  digitalWrite(WORKING_LED, TURNOFF_LED);
   analogWrite(WORKING_LED, 255);
   switch (device_no)
   {
-    case MOTOR_CRUSH_LED:
+    case MOTOR_CRUSH:
       delay (1000); // Prevent Motor to stop suddenly after start
       crusher_motor.coast();
       break;
-    case  MOTOR_STIR_LED:
+    case  MOTOR_STIR:
       delay (1000); // Prevent Motor to stop suddenly after start
       stir_motor.coast();
       break;
