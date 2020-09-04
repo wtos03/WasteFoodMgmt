@@ -101,7 +101,7 @@ void setup() {
   pinMode(WORKING_LED, OUTPUT);
   pinMode(SERVO_EM, OUTPUT);
   pinMode(START_STOP_SW,INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(START_STOP_SW), startStopSW, FALLING);
+  attachInterrupt(digitalPinToInterrupt(START_STOP_SW), startStopSW, LOW);
   
   digitalWrite(WORKING_LED, TURNOFF_LED);
   showLED(AUTO_LED);  // WORKING_LED  Separate from other LED
@@ -150,13 +150,9 @@ void loop() {
  */
 void startStopSW(void)
 {
-   static unsign int debounce = 0;
-   debounce++;
-   if (debounce > 50000 )
-   {
-      debounce = 0;
-      switcStatus = SWITCH_PRESS);
-   } 
+    for (int i= 0; i < 10000;i++);
+    switchStatus = SWITCH_PRESS;
+   
 }
 /*
  * Show LED on the panel TURNON Selected LED and  TURNOFF all others LED.
@@ -375,36 +371,6 @@ void autoStartStop (void)
 }
 
 
-
-/*
- * This procedure called when users click sw show at Auto position. It will start from motor crusher until
- * stop, open EM valve  and start stir motor.
- 
-void autoStartStop (void)
-{
-  
-  // Start crusher motor for XXX time or until stop sensor trigger
-  int state  = 0;
-  int endProgram = 0;
-  switchStatus = 0;
-  
- 
-     Serial.print (" State = ");
-     Serial.println (state);
-          deviceStart(MOTOR_CRUSH_LED);
-          delay (5000);
-          deviceStart(SERVO_EM_LED);
-          delay (5000);
-          deviceStart(MOTOR_STIR_LED);
-          delay (5000);
-          deviceStop (MOTOR_STIR_LED);
-          endProgram = 1;
- 
- 
-}
-*/
-
-
 /*
    To start device  Crusher Motor, Stir Motor or Servo
    Can st   switchStatus = 0;
@@ -412,7 +378,7 @@ void autoStartStop (void)
 */
 void deviceStart (int device_no)
 {
-//   digitalWrite (device_no,TURNON_LED);     // TURN ON Devices' LED Make Stir motor not start ??
+   digitalWrite (device_no,TURNON_LED);     // TURN ON Devices' LED Make Stir motor not start ??
    analogWrite(WORKING_LED, 100);
    
   switch (device_no)
