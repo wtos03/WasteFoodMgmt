@@ -36,6 +36,8 @@
 #define  MAX_LED  4     // Knob control LED  4 
 #define  TURNON_LED     LOW   // Depend on how you connect LED in this case LED's Negative pin connect to IO port
 #define  TURNOFF_LED    HIGH
+#define  ON    1
+#define  OFF   0
 
 // Port use for Display LED and Control Motor
 #define  AUTO_LED           0
@@ -45,6 +47,9 @@
 #define  MOTOR_STIR_LED     9
 #define  WORKING_LED        6
 #define  SERVO_EM           5
+
+#define CRUSH_TIME        5000
+#define STIR_TIME         5000
 
 
  
@@ -73,7 +78,8 @@
 //Global Variable
 // MAP Table between LED Panel to Actual Port usage 
 int ledPanel[MAX_LED] =  {AUTO_LED,MOTOR_CRUSH_LED,SERVO_EM_LED,MOTOR_STIR_LED};   
-volatile int status = 0;
+int switchStatus = OFF;
+int workingMode = OFF;
 
 
 // Tlv493d Opject
@@ -95,7 +101,7 @@ void setup() {
   pinMode(WORKING_LED, OUTPUT);
   pinMode(SERVO_EM, OUTPUT);
   pinMode(START_STOP_SW,INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(START_STOP_SW), startStopSW, LOW);
+  attachInterrupt(digitalPinToInterrupt(START_STOP_SW), startStopSW, FALLING);
   
   digitalWrite(WORKING_LED, TURNOFF_LED);
   showLED(AUTO_LED);  // WORKING_LED  Separate from other LED
@@ -140,15 +146,22 @@ void loop() {
 
 /*
  * Start Stop SW  ISR
- * Global  variable
+ * Global  variable   status 
  */
 void startStopSW(void)
 {
-    for (int i = 0 ; i <10000; i++);   // SW Debounce 
-    status = SWITCH_PRESS;
+   static unsign int debounce = 0;
+   debounce++;
+   if (debounce > 50000 )
+   {
+      debounce = 0;
+      switcStatus = SWITCH_PRESS);
+   } 
 }
 /*
- * Show LED on the panel TURNON Selected LED and  TURNOFF all others LED
+ * Show LED on the panel TURNON Selected LED and  TURNOFF all others LED.
+ * This procedure will map LED's position to Port use in program.
+ * INPUT   Position of LED on Panel
  */
 void showLED( int led)
 {
@@ -234,36 +247,34 @@ int  knobPosition(int direction)
     currentled--;
     if (currentled < 0)
       currentled = 0;
-  //  showLED(currentled);
   }
   
   // Check Switch Press
 
-  if (status == SWITCH_PRESS)
+  if (switchStatus == SWITCH_PRESS)
   {
-    if (toggle)
+    if (toggle) // ON
     {
       if (ledPanel[currentled] == AUTO_LED)  // AUTO PROGRAM Start
       {
             autoStartStop();
- //           showLED(currentled);   
       }
       else
       {
-          deviceStart(ledPanel[currentled]);
+          deviceStart(ledPanel[currentled]); // MAP Position of LED to Port
       }
     }
-    else
+    else // OFF
     {
-        deviceStop(ledPanel[currentled]);
+          deviceStop(ledPanel[currentled]); // MAP Position of LED to Port
     }
     if (ledPanel[currentled] != SERVO_EM_LED)  // SERVO_EM is Push ON/Off  Not toggle state like other  
     {
         toggle = ~toggle;
     }
-    status = 0;   // Clear Switch Press
     
   }
+  switchStatus = 0;   // Clear Switch Press 
   showLED(currentled);
   return currentled;
 
@@ -286,43 +297,124 @@ void servoWrite (int angle)
 }
 
 /*
- * This procedure called when users click when knob show at Auto position. It will start from motor crusher until
+ * This procedure called when users click sw show at Auto position. It will start from motor crusher until
  * stop, open EM valve  and start stir motor.
  */
 void autoStartStop (void)
 {
   
   // Start crusher motor for XXX time or until stop sensor trigger
-  int  trigger = 0;
-  
-  do
-  {
-    deviceStart(MOTOR_CRUSH_LED);
-    delay (10000);
-    
-  }while (trigger);
+  int state  = 0;
+  int endProgram = 0;
+  int crushTime  = 0;
+  int stirTime = 0;
 
-  // Enable EM valve
-    deviceStart(SERVO_EM_LED);
-    delay(3000);
-  // Enable Motor Stir for XXX time
-    deviceStart(MOTOR_STIR_LED);
-    delay (10000);  
-    deviceStop(MOTOR_STIR_LED);
+  switchStatus = 0;
+  do 
+  {
+     Serial.print (" State = ");
+     Serial.println (state);
+     switch (state)
+     {
+      case 0:
+          state++;
+          break;
+      case 1:  // TURN ON MOTOR CRUSH
+          if (crushTime == 0)
+          {
+              deviceStart(MOTOR_CRUSH_LED);
+          }
+          if (crushTime < CRUSH_TIME)
+          {
+            crushTime++;
+          }
+          else
+          { 
+            crushTime = 0;
+            state++;
+          }
+          break;
+      case 2:  
+          if (stirTime == 0)
+          {
+              deviceStart(SERVO_EM_LED);
+              deviceStart(MOTOR_STIR_LED);
+          }
+          if (stirTime < STIR_TIME)
+          {
+            stirTime++;
+          }
+          else
+          { 
+            deviceStop (MOTOR_STIR_LED);
+            endProgram = 1;
+            stirTime = 0;
+          }
+          break;
+       }    
+       if (switchStatus == SWITCH_PRESS)
+       {
+          endProgram = 1;  
+          stirTime = 0;
+          crushTime = 0;
+          switchStatus = 0; // Clear Switch Press
+          switch (state)
+          {
+            case 1:
+              deviceStop (MOTOR_CRUSH_LED);
+              break;
+            case 2:
+              deviceStop (MOTOR_STIR_LED);
+              break;
+          }
+       }
+       
+    
+  } while (!endProgram);  
 
 }
 
 
+
+/*
+ * This procedure called when users click sw show at Auto position. It will start from motor crusher until
+ * stop, open EM valve  and start stir motor.
+ 
+void autoStartStop (void)
+{
+  
+  // Start crusher motor for XXX time or until stop sensor trigger
+  int state  = 0;
+  int endProgram = 0;
+  switchStatus = 0;
+  
+ 
+     Serial.print (" State = ");
+     Serial.println (state);
+          deviceStart(MOTOR_CRUSH_LED);
+          delay (5000);
+          deviceStart(SERVO_EM_LED);
+          delay (5000);
+          deviceStart(MOTOR_STIR_LED);
+          delay (5000);
+          deviceStop (MOTOR_STIR_LED);
+          endProgram = 1;
+ 
+ 
+}
+*/
+
+
 /*
    To start device  Crusher Motor, Stir Motor or Servo
-   Can start one device at a time ????
+   Can st   switchStatus = 0;
+  art one device at a time ????
 */
 void deviceStart (int device_no)
 {
-//  showLED(device_no);     // TURN ON Devices' LED 
-//  digitalWrite (WORKING_LED, TURNON_LED);  //TURN ON STATUS LED
+//   digitalWrite (device_no,TURNON_LED);     // TURN ON Devices' LED Make Stir motor not start ??
    analogWrite(WORKING_LED, 100);
- 
+   
   switch (device_no)
   {
     case MOTOR_CRUSH_LED:
@@ -330,20 +422,20 @@ void deviceStart (int device_no)
        stir_motor.coast();
        crusher_motor.setSpeed(0);
        crusher_motor.rampSpeed(255,5000);   // Use start Big motor cannot start ???
- //    crusher_motor.start(255);
+//    crusher_motor.start(255);
        break;
     case SERVO_EM_LED:
-      emValue();  // No need delay because had been delay in emValue
- //     digitalWrite (WORKING_LED, TURNOFF_LED);  //TURN OFF WORKING LED
-      analogWrite(WORKING_LED, 255);
       stir_motor.coast();
       crusher_motor.coast();
+      emValve();  // No need delay because had been delay in emValve
+      analogWrite(WORKING_LED, 255);
       break;
     case  MOTOR_STIR_LED:
       delay (1000); // Prevent Motor to stop suddenly after start
       crusher_motor.coast();
-      stir_motor.setSpeed(0);
-      stir_motor.rampSpeed(255,5000);   // Use start Big motor cannot start ???
+ //     stir_motor.setSpeed(0);
+ //     stir_motor.rampSpeed(255,5000);   // Use start Big motor cannot start ???
+      stir_motor.start(255);
       break;
   }
 
@@ -375,13 +467,12 @@ void deviceStop (int device_no)
 /*
  * For EM Value just open and close
  */
-void emValue()
-{   Serial.println("Servo Start");
+void emValve()
+{  
     servoWrite (MAX_VALVE);
     delay(1000);
     servoWrite (MIN_VALVE);
-    delay(1000);  // Move Back 
-  
+    delay(2000);  // Move Back 
 }
 
 
