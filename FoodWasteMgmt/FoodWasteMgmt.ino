@@ -54,8 +54,7 @@
 #define  MOTOR_STIR     3     
 
 
-#define CRUSH_TIME        5000
-#define STIR_TIME         5000
+#define STIR_TIME         10000
 
 
  
@@ -307,8 +306,8 @@ void autoStartStop (void)
   // Start crusher motor for XXX time or until stop sensor trigger
   int state  = 0;
   int endProgram = 0;
-  int crushTime  = 0;
-  int stirTime = 0;
+  int crushStart  = 0;
+  unsigned int stirTime = 0;
 
   switchStatus = 0;
   do 
@@ -321,18 +320,10 @@ void autoStartStop (void)
           state++;
           break;
       case 1:  // TURN ON MOTOR CRUSH
-          if (crushTime == 0)
-          {
+          if (crushStart == 0)
+          {           
               deviceStart(MOTOR_CRUSH);
-          }
-          if (crushTime < CRUSH_TIME)
-          {
-            crushTime++;
-          }
-          else
-          { 
-            crushTime = 0;
-            state++;
+              crushStart = 1;
           }
           break;
       case 2:  
@@ -341,9 +332,12 @@ void autoStartStop (void)
               deviceStart(SERVO_EM);
               deviceStart(MOTOR_STIR);
           }
+          
           if (stirTime < STIR_TIME)
           {
             stirTime++;
+            Serial.println( stirTime);
+            Serial.println(switchStatus);
           }
           else
           { 
@@ -352,12 +346,21 @@ void autoStartStop (void)
             stirTime = 0;
           }
           break;
-       }    
-       if (switchStatus == SWITCH_PRESS)
+       }   // End switch
+         
+       if (switchStatus == SWITCH_PRESS)  
        {
+         if (state == 1) // Still at crusher motor and press start/stop go to next state
+         {
+           state++; // Next state
+           delay (1000); // Key bounce protect 
+           switchStatus = 0; // Clear key press status
+         }
+         else    // End program
+         {
           endProgram = 1;  
           stirTime = 0;
-          crushTime = 0;
+          crushStart = 0;
           switchStatus = 0; // Clear Switch Press
           switch (state)
           {
@@ -368,8 +371,8 @@ void autoStartStop (void)
               deviceStop (MOTOR_STIR);
               break;
           }
-       }
-       
+         }  
+       }     
     
   } while (!endProgram);  
 
@@ -394,7 +397,6 @@ void deviceStart (int device_no)
        stir_motor.coast();
        crusher_motor.setSpeed(0);
        crusher_motor.rampSpeed(255,5000);   // Use start Big motor cannot start ???
-//    crusher_motor.start(255);
        break;
     case SERVO_EM:
       stir_motor.coast();
@@ -445,30 +447,3 @@ void emValve()
     servoWrite (MIN_VALVE);
     delay(2000);  // Move Back 
 }
-
-
-/*
-  void servWrite(int angle)
-  {
-    float delay_time;
-    int i;
-    for ( i = 0 ; i < 20 ; i++)  // Loop send PWM until Servo move in position
-    {
-      angle=constrain(angle,MIN_ANGLE,MAX_ANGLE);  // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
-      delay_time=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);  // Boundaries to be calibrated by trial and error
-      digitalWrite(SERVO_EM,HIGH);
-      delayUs(delay_time);
-      digitalWrite(SERVO_EM,LOW);
-      delayUs((20000-delay_time));  // Because servo MG996 requires a total pulse of 20mS with proper duty cycle
-    }
-    Serial.println (angle);
-    Serial.println (delay_time);
-
-  }
-
-  void delayUs(unsigned long uS)
-  {
-  unsigned long time_now = micros();
-      while(micros() < time_now + uS);
-  }
-*/
