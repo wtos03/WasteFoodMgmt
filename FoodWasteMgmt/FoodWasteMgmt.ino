@@ -31,7 +31,7 @@
 
 // Define constant use in program
 
-#define  DEBUG
+//#define  DEBUG
 
 #define  MAX_LED  4     // Knob control LED  4 
 #define  TURNON_LED     LOW   // Depend on how you connect LED in this case LED's Negative pin connect to IO port
@@ -66,8 +66,8 @@
 #define  KNOB_CLICK  2
 #define  KNOB_NOACTION  0
 #define  CLICK_AMOUNT 50
-#define  FORWARD_AMOUNT  50
-#define  BACKWARD_AMOUNT -50
+#define  FORWARD_AMOUNT   -40
+#define  BACKWARD_AMOUNT  40
 #define  SWITCH_PRESS 1
 
 // Servo Control for MG996
@@ -75,16 +75,16 @@
 #define MAX_ANGLE 180  // Maximum servo angle
 #define MIN_VALVE   60  // Want to move backward
 #define MAX_VALVE   0
-//#define MIN_PULSE_WIDTH 540     // PulseWidth for on-pulse to write 0 degree angle on servo
-//#define MAX_PULSE_WIDTH 2000    // PulseWidth for on-pulse to write 180 degree angle on servo
+#define MIN_PULSE_WIDTH 540     // PulseWidth for on-pulse to write 0 degree angle on servo
+#define MAX_PULSE_WIDTH 2000    // PulseWidth for on-pulse to write 180 degree angle on servo
 #define MIN_DUTY_CYCLE 2
 #define MAX_DUTY_CYCLE 25
 
 //Global Variable
 // MAP Table between LED Panel to Actual Port usage 
 int ledPanel[MAX_LED] =  {AUTO_LED,MOTOR_CRUSH_LED,SERVO_EM_LED,MOTOR_STIR_LED};   
-int switchStatus = OFF;
-int workingMode = OFF;
+int switchStatus = OFF;    // ISP Keypress *****
+int selectedLED = 0;
 
 
 // Tlv493d Opject
@@ -106,7 +106,7 @@ void setup() {
   pinMode(WORKING_LED, OUTPUT);
   pinMode(SERVO_PORT, OUTPUT);
   pinMode(START_STOP_SW,INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(START_STOP_SW), startStopSW, LOW);
+ // attachInterrupt(digitalPinToInterrupt(START_STOP_SW), startStopSW, FALLING);
   
   digitalWrite(WORKING_LED, TURNOFF_LED);
   showLED(AUTO_LED);  // WORKING_LED  Separate from other LED
@@ -117,10 +117,9 @@ void setup() {
   while (!Serial);
   Tlv493dMagnetic3DSensor.begin();
   setAnalogWriteFrequency (SERVO_PORT, 22); //Test these number get around 50 Hz 20 ms
-  setAnalogWriteFrequency (WORKING_LED, 2); //Test these number get around 50 Hz 20 ms
+  setAnalogWriteFrequency (WORKING_LED, 2); //Test these number get around 50 Hz 2 ms
   
-  servoWrite(MIN_VALVE);            // Reset servo Position
-
+  
   // Enable MotorController on all Shields and Motors
   // Note: Required to be done before starting to configure the motor
   // controller is set to default CS1 pin
@@ -137,15 +136,28 @@ void setup() {
   // start the motor controller
   crusher_motor.begin();
   stir_motor.begin();
-
+  servoWrite(MIN_VALVE);            // Reset servo Position
+  Serial.println ("Start Program");
+ 
 
 }
 
 void loop() {
   int direction;
+  int toggle = 0;
   delay(300);  // Control sentivity of the knob
   direction =  chkMovement();
-  knobPosition(direction);
+  selectedLED = knobPosition(direction);
+  Serial.print(" LED Position:  ");
+  Serial.println(selectedLED);
+// Check Start/Stop Key
+  
+  if (digitalRead(START_STOP_SW) == LOW)
+  {
+    chkStartStopKey(selectedLED);
+ //   switchStatus = 0;    
+  }
+   
  
 }
 
@@ -155,9 +167,15 @@ void loop() {
  */
 void startStopSW(void)
 {
-    for (int i= 0; i < 10000;i++);
-    switchStatus = SWITCH_PRESS; 
+  static int count = 0;
+     count++;
+     switchStatus = SWITCH_PRESS; 
+     Serial.print ("Key Pressed");
+     Serial.println (count);
+  
 }
+   
+   
 /*
  * Show LED on the panel TURNON Selected LED and  TURNOFF all others LED.
  * This procedure will map LED's position to Port use in program.
@@ -200,9 +218,9 @@ int chkMovement ()
   current_angle = (Tlv493dMagnetic3DSensor.getAzimuth()) * 100.0; // Azimuth angle is very small need to scale up
   diff_angle =  current_angle - prev_angle;
   prev_angle = current_angle;
-  if (diff_angle > FORWARD_AMOUNT)
+  if (diff_angle < FORWARD_AMOUNT)
     direction =  KNOB_FORWARD;
-  else if (diff_angle < BACKWARD_AMOUNT)
+  else if (diff_angle > BACKWARD_AMOUNT)
     direction = KNOB_BACKWARD;
   else
     direction = KNOB_NOACTION;
@@ -234,7 +252,7 @@ int chkMovement ()
 int  knobPosition(int direction)
 {
   int static  currentled = 0; 
-  int static  toggle = 0;
+  unsigned int static  toggle = 0;
   if (direction == KNOB_FORWARD )
   {
     currentled++;
@@ -248,53 +266,45 @@ int  knobPosition(int direction)
     if (currentled < 0)
       currentled = 0;
   }
-  
-  // Check Switch Press
+  showLED (currentled);
+  return currentled;
 
-  if (switchStatus == SWITCH_PRESS)
-  {
+}
+
+/* Check whether start/stop key pressed  if yes start or stop devices
+ * 
+ */
+void chkStartStopKey (int led)
+{
+    // Check Switch Press
+  static int toggle = 0;
+    toggle = ~toggle;  // Beware toogle between 0 and 0xFFFF not 0 and 1
     if (toggle) // ON
     {
-      if (currentled == AUTO_LED)  // AUTO PROGRAM Start
+      if (led == AUTO_LED)  // AUTO PROGRAM Start
       {
             autoStartStop();
       }
       else
       {
-          deviceStart(currentled); 
+          deviceStart(led); 
       }
     }
     else // OFF
     {
-          deviceStop(currentled); // MAP Position of LED to Port
+          deviceStop(led); // MAP Position of LED to Port
     }
-    if (currentled != SERVO_EM)  // SERVO_EM is Push ON/Off  Not toggle state like other  
+    
+   if (led == SERVO_EM)  // SERVO_EM is Push ON/Off  Not toggle state like other  
     {
         toggle = ~toggle;
     }
-    
-  }
-  switchStatus = 0;   // Clear Switch Press 
-  showLED(currentled);
-  return currentled;
+    Serial.println(toggle);
+}  
 
-}
 
-void servoWrite (int angle)
-{
-  int duty_cycle;
-  float pulse_width;
-  int result;
-  angle = constrain(angle, MIN_ANGLE, MAX_ANGLE); // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
-  //   pulse_width=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);  // Boundaries to be calibrated by trial and error
-  //   duty_cycle=map(pulse_width,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH,MIN_DUTY_CYCLE,MAX_DUTY_CYCLE);  // Boundaries to be calibrated by trial and error
-  duty_cycle = map(angle, MIN_ANGLE, MAX_ANGLE, MIN_DUTY_CYCLE, MAX_DUTY_CYCLE); // Boundaries to be calibrated by trial and error
-  analogWrite(SERVO_PORT, duty_cycle);
-  delay(1000);
-  analogWrite(SERVO_PORT,0); // Disable PWM Prevent servo hot
- 
 
-}
+
 
 /*
  * This procedure called when users click sw show at Auto position. It will start from motor crusher until
@@ -304,7 +314,7 @@ void autoStartStop (void)
 {
   
   // Start crusher motor for XXX time or until stop sensor trigger
-  int state  = 0;
+  int state  = 1;
   int endProgram = 0;
   int crushStart  = 0;
   unsigned int stirTime = 0;
@@ -348,13 +358,13 @@ void autoStartStop (void)
           break;
        }   // End switch
          
-       if (switchStatus == SWITCH_PRESS)  
+       if (digitalRead(START_STOP_SW) == LOW)  
        {
          if (state == 1) // Still at crusher motor and press start/stop go to next state
          {
            state++; // Next state
-           delay (1000); // Key bounce protect 
-           switchStatus = 0; // Clear key press status
+ //          delay (1000); // Key bounce protect 
+ //          switchStatus = 0; // Clear key press status
          }
          else    // End program
          {
@@ -402,7 +412,6 @@ void deviceStart (int device_no)
       stir_motor.coast();
       crusher_motor.coast();
       emValve();  // No need delay because had been delay in emValve
-      analogWrite(WORKING_LED, 255);
       break;
     case  MOTOR_STIR:
       delay (1000); // Prevent Motor to stop suddenly after start
@@ -421,12 +430,14 @@ void deviceStart (int device_no)
 */
 void deviceStop (int device_no)
 {
-  analogWrite(WORKING_LED, 255);
+  analogWrite(WORKING_LED, 255);  
   switch (device_no)
   {
     case MOTOR_CRUSH:
       delay (1000); // Prevent Motor to stop suddenly after start
       crusher_motor.coast();
+      break;
+    case  SERVO_EM:
       break;
     case  MOTOR_STIR:
       delay (1000); // Prevent Motor to stop suddenly after start
@@ -443,7 +454,50 @@ void deviceStop (int device_no)
 void emValve()
 {  
     servoWrite (MAX_VALVE);
-    delay(1000);
     servoWrite (MIN_VALVE);
-    delay(2000);  // Move Back 
+    //Turn off Working LED
+    analogWrite(WORKING_LED, 255); 
+}
+
+
+void servWrite (int angle)
+{
+  int duty_cycle;
+  float pulse_width;
+  int result;
+  angle = constrain(angle, MIN_ANGLE, MAX_ANGLE); // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
+  //   pulse_width=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);  // Boundaries to be calibrated by trial and error
+  //   duty_cycle=map(pulse_width,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH,MIN_DUTY_CYCLE,MAX_DUTY_CYCLE);  // Boundaries to be calibrated by trial and error
+  duty_cycle = map(angle, MIN_ANGLE, MAX_ANGLE, MIN_DUTY_CYCLE, MAX_DUTY_CYCLE); // Boundaries to be calibrated by trial and error
+ Serial.print ( "Duty Cycle =  ");
+ Serial.println (duty_cycle);
+  analogWrite(SERVO_PORT, duty_cycle);
+  delay(2000);
+  Serial.println ("Moved servo "); 
+  analogWrite(SERVO_PORT,0); // Disable PWM Prevent servo hot
+ 
+
+}
+
+void servoWrite(int angle)
+{
+    float delay_time;
+    int i;
+    for ( i = 0 ; i < 30 ; i++)
+    {
+      angle=constrain(angle,MIN_ANGLE,MAX_ANGLE);  // Constraining the angle to avoid motor cluttering due to unusual pulses at higher angles
+      delay_time=map(angle,MIN_ANGLE,MAX_ANGLE,MIN_PULSE_WIDTH,MAX_PULSE_WIDTH);  // Boundaries to be calibrated by trial and error
+      digitalWrite(SERVO_PORT,HIGH);
+      delayUs(delay_time);
+      digitalWrite(SERVO_PORT,LOW);
+      Serial.println (angle);
+      Serial.println (delay_time);
+      delayUs((20000-delay_time));  // Because servo sg90 requires a total pulse of 20mS with proper duty cycle
+    }
+}
+
+void delayUs(unsigned long uS)
+{
+  unsigned long time_now = micros();
+      while(micros() < time_now + uS);
 }
