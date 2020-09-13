@@ -406,7 +406,8 @@ void deviceStart (int device_no)
        delay (1000); // Prevent Motor to stop suddenly after start
        stir_motor.coast();
        crusher_motor.setSpeed(0);
-       crusher_motor.rampSpeed(255,5000);   // Use start Big motor cannot start ???
+       crusher_motor.rampSpeed(-255,10000);   // Use start Big motor cannot start ???
+ //      crusher_motor.start (-255);
        break;
     case SERVO_EM:
       stir_motor.coast();
@@ -460,7 +461,7 @@ void emValve()
 }
 
 
-void servWrite (int angle)
+void servoWrite (int angle)
 {
   int duty_cycle;
   float pulse_width;
@@ -479,7 +480,7 @@ void servWrite (int angle)
 
 }
 
-void servoWrite(int angle)
+void servWrite(int angle)
 {
     float delay_time;
     int i;
