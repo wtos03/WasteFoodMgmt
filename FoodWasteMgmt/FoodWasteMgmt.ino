@@ -128,8 +128,9 @@ void setup() {
   // Connect a motor to HB1/HB2 highside and HB3/HB4 lowside
   // With two combined halfbridges the motor can have up to 1.8 A
   // IMPORTANT connect PWM to Lowside as higside is active Free wheeling
-  crusher_motor.initConnector(crusher_motor.HIGHSIDE, controller.TLE_NOPWM, controller.TLE_HB1, controller.TLE_HB2, controller.TLE_NOHB, controller.TLE_NOHB);
-  crusher_motor.initConnector(crusher_motor.LOWSIDE,  controller.TLE_PWM1, controller.TLE_HB3, controller.TLE_HB4, controller.TLE_NOHB, controller.TLE_NOHB);
+  // Lowside give +  Use HB1-4  connector for Half bridge 
+ // crusher_motor.initConnector(crusher_motor.HIGHSIDE, controller.TLE_NOPWM, controller.TLE_HB1, controller.TLE_HB2, controller.TLE_NOHB, controller.TLE_NOHB);
+  crusher_motor.initConnector(crusher_motor.LOWSIDE,  controller.TLE_PWM1, controller.TLE_HB3, controller.TLE_HB4, controller.TLE_HB1, controller.TLE_HB2);
   stir_motor.initConnector(crusher_motor.HIGHSIDE, controller.TLE_NOPWM, controller.TLE_HB9, controller.TLE_HB10, controller.TLE_NOHB, controller.TLE_NOHB);
   stir_motor.initConnector(crusher_motor.LOWSIDE,  controller.TLE_PWM1,  controller.TLE_HB11, controller.TLE_HB12, controller.TLE_NOHB, controller.TLE_NOHB);
 
